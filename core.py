@@ -359,14 +359,3 @@ def get_harmonic_scale(key=Notes.C, sharps=True):
             Chord(key=scale_notes[5].note, chord_type=ChordType.MINOR),
             Chord(key=scale_notes[1].note, chord_type=ChordType.MINOR)]
 
-
-if __name__ == '__main__':
-    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True))
-    print()
-    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[1, 3, 5]))
-    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[2, 4, 6]))
-    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[3, 5, 7]))
-    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[4, 6, 8]))
-    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[5, 7, 9]))
-    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[6, 8, 10]))
-    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[7, 9, 11]))
