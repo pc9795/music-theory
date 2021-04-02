@@ -115,6 +115,11 @@ class Intervals:
     MINOR_SEVENTH = Interval("minor-seventh", 10, interval_type=IntervalType.DISSONANT, ratio="9:5")
     MAJOR_SEVENTH = Interval("major-seventh", 11, interval_type=IntervalType.DISSONANT, ratio="15:8")
     OCTAVE = Interval("octave", 12, interval_type=IntervalType.CONSONANT, ratio="2:1")
+    SEMITONES_TO_INTERVALS = {
+        0: UNISON,
+        1: MINOR_SECOND, 2: MAJOR_SECOND, 3: MINOR_THIRD, 4: MAJOR_THIRD, 5: PermissionError, 6: TRITONE,
+        7: PERFECT_FIFTH, 8: MINOR_SIXTH, 9: MAJOR_SIXTH, 10: MAJOR_SEVENTH, 12: OCTAVE
+    }
 
 
 class Scale:
@@ -181,22 +186,21 @@ class ScaleNote:
         self.note = note
         self.scale_degree = scale_degree
         self.scale = scale
+        self.pos = self.scale_degree.get_pos(self.scale)
 
     def __str__(self):
-        pos = self.scale_degree.get_pos(self.scale)
-        if pos <= self.scale_degree.degree:
+        if self.pos <= self.scale_degree.degree:
             return f"{self.note.name}({self.scale_degree.degree})"
-        return f"{self.note.name}({pos}/{self.scale_degree.degree})"
+        return f"{self.note.name}({self.pos}/{self.scale_degree.degree})"
 
     def __repr__(self):
-        pos = self.scale_degree.get_pos(self.scale)
-        if pos <= self.scale_degree.degree:
+        if self.pos <= self.scale_degree.degree:
             return f"{self.note.name}({self.scale_degree.degree})"
-        return f"{self.note.name}({pos}/{self.scale_degree.degree})"
+        return f"{self.note.name}({self.pos}/{self.scale_degree.degree})"
 
 
-def get_notes(scale=Scales.MAJOR, key=Notes.C, sharps=True, octaves=1, with_intervals=False, filter_scale_degrees=None):
-    filter_scale_degrees = [] if not filter_scale_degrees else filter_scale_degrees
+def get_notes(scale=Scales.MAJOR, key=Notes.C, sharps=True, octaves=1, with_intervals=False, filter_pos=None,
+              combine_intervals=True):
     chromatic_notes = CHROMATIC_NOTES_WITH_SHARPS if sharps else CHROMATIC_NOTES_WITH_FLATS
     chromatic_notes_len = len(chromatic_notes)
 
@@ -213,7 +217,33 @@ def get_notes(scale=Scales.MAJOR, key=Notes.C, sharps=True, octaves=1, with_inte
             notes.append(ScaleNote(next_note, scale_degree, scale))
             pos = next_pos
 
-    return list(filter(lambda scale_note: scale_note.scale_degree not in filter_scale_degrees, notes))
+    if filter_pos:
+        notes = list(filter(
+            lambda scale_note: isinstance(scale_note,
+                                          Interval) or scale_note.pos in filter_pos, notes))
+        # Trim intervals from front and end of the list
+        while notes:
+            if isinstance(notes[0], ScaleNote):
+                break
+            notes.pop(0)
+        while notes:
+            if isinstance(notes[len(notes) - 1], ScaleNote):
+                break
+            notes.pop(len(notes) - 1)
+
+        # Combine simple tones and semitones
+        if combine_intervals:
+            i = 0
+            while i < len(notes) - 1:
+                if not isinstance(notes[i], Interval):
+                    i += 1
+                    continue
+                semitones = 0
+                while i < len(notes) - 1 and isinstance(notes[i], Interval):
+                    semitones = notes.pop(i).semitones
+                notes.insert(i, Intervals.SEMITONES_TO_INTERVALS[semitones])
+                i += 1
+    return notes
 
 
 def _get_pos(note_to_find, notes):
@@ -331,12 +361,12 @@ def get_harmonic_scale(key=Notes.C, sharps=True):
 
 
 if __name__ == '__main__':
-    print(get_notes(scale=Scales.MAJOR, key=Notes.C, filter_scale_degrees=[1, 3, 5]))
-    print(get_notes(scale=Scales.MAJOR, key=Notes.D, filter_scale_degrees=[1, 3, 5]))
-    print(get_notes(scale=Scales.MAJOR, key=Notes.E, filter_scale_degrees=[1, 3, 5]))
-    print(get_notes(scale=Scales.MAJOR, key=Notes.F, filter_scale_degrees=[1, 3, 5]))
-    print(get_notes(scale=Scales.MAJOR, key=Notes.G, filter_scale_degrees=[1, 3, 5]))
-    print(get_notes(scale=Scales.MAJOR, key=Notes.A, filter_scale_degrees=[1, 3, 5]))
-    print(get_notes(scale=Scales.MAJOR, key=Notes.B, filter_scale_degrees=[1, 3, 5]))
+    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True))
     print()
-    print(get_chords())
+    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[1, 3, 5]))
+    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[2, 4, 6]))
+    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[3, 5, 7]))
+    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[4, 6, 8]))
+    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[5, 7, 9]))
+    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[6, 8, 10]))
+    print(get_notes(scale=Scales.DORIAN, key=Notes.D, with_intervals=True, octaves=2, filter_pos=[7, 9, 11]))
