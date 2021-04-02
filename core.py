@@ -32,13 +32,13 @@ class Note:
     def __eq__(self, other):
         if not isinstance(other, Note):
             return False
-        # D <= D or D# <= D# or Db <= Db
+        # D == D
         if self.name == other.name:
             return True
-        # C# <= Db
+        # C# == Db
         if self.key_order_diff(other) == -1 and self.is_sharp() and other.is_flat():
             return True
-        # Db <= C#
+        # Db == C#
         if self.key_order_diff(other) == 1 and self.is_flat() and other.is_sharp():
             return True
         return False
@@ -49,7 +49,7 @@ class Note:
             if self.is_plain():
                 return True if other.is_sharp() else False
             # D# <= D or Db <= D
-            return False if self.is_sharp() else False
+            return False if self.is_sharp() else True
         return True if self.key_order_diff(other) < 0 else False
 
     def __gt__(self, other):
@@ -57,6 +57,31 @@ class Note:
 
     def __ge__(self, other):
         return not self.__lt__(other)
+
+    def __sub__(self, other: 'Note'):
+        if not isinstance(other, Note):
+            raise RuntimeError
+
+        if self.is_flat():
+            self_pos = _get_pos(self, CHROMATIC_NOTES_WITH_FLATS)
+        else:
+            self_pos = _get_pos(self, CHROMATIC_NOTES_WITH_SHARPS)
+
+        if other.is_flat():
+            other_pos = _get_pos(other, CHROMATIC_NOTES_WITH_FLATS)
+        else:
+            other_pos = _get_pos(other, CHROMATIC_NOTES_WITH_SHARPS)
+
+        semitones = self_pos - other_pos
+        # Scale repeats with high pitch
+        if semitones < 0:
+            semitones = len(CHROMATIC_NOTES_WITH_SHARPS) + semitones
+
+        interval = Intervals.SEMITONES_TO_INTERVALS.get(semitones)
+        if interval:
+            return interval
+
+        return Interval(name='custom', semitones=semitones)
 
 
 class Notes:
@@ -85,11 +110,16 @@ class IntervalType(enum.Enum):
 
 
 class Interval:
-    def __init__(self, name: str, semitones: int, interval_type: IntervalType = None, ratio: str = None):
+    def __init__(self, name: str, semitones: int, interval_type: 'IntervalType' = None, ratio: str = None):
         self.name = name
         self.semitones = semitones
         self.type = interval_type
         self.ratio = ratio
+
+    def __eq__(self, other: 'Interval'):
+        if not isinstance(other, Interval):
+            return False
+        return self.name == other.name and self.semitones == other.semitones and self.type == other.type and self.ratio == other.ratio
 
     def __str__(self):
         return f"{self.name}({self.semitones})"
@@ -123,7 +153,7 @@ class Intervals:
 
 
 class Scale:
-    def __init__(self, name: str, intervals: [Interval]):
+    def __init__(self, name: str, intervals: '[Interval]'):
         self.name = name
         self.intervals = intervals
 
@@ -132,6 +162,12 @@ class Scale:
 
     def scale_len(self):
         return len(self.intervals) + 1
+
+    def __eq__(self, other: 'Scale'):
+        if not isinstance(other, Scale):
+            return False
+
+        return self.name == other.name and self.intervals == other.intervals
 
 
 class Scales:
@@ -180,13 +216,25 @@ class ScaleDegree:
     def get_pos(self, scale: Scale):
         return ((self.octave - 1) * scale.interval_len()) + self.degree
 
+    def __eq__(self, other: 'ScaleDegree'):
+        if not isinstance(other, ScaleDegree):
+            return False
+
+        return self.degree == other.degree and self.octave == other.octave
+
 
 class ScaleNote:
-    def __init__(self, note: Note, scale_degree: ScaleDegree, scale: Scale):
+    def __init__(self, note: 'Note', scale_degree: 'ScaleDegree', scale: Scale):
         self.note = note
         self.scale_degree = scale_degree
         self.scale = scale
         self.pos = self.scale_degree.get_pos(self.scale)
+
+    def __eq__(self, other: 'ScaleNote'):
+        if not isinstance(other, ScaleNote):
+            return False
+
+        return self.note == other.note and self.scale_degree == other.scale_degree and self.scale == other.scale
 
     def __str__(self):
         if self.pos <= self.scale_degree.degree:
@@ -200,7 +248,7 @@ class ScaleNote:
 
 
 def get_notes(scale=Scales.MAJOR, key=Notes.C, sharps=True, octaves=1, with_intervals=False, filter_pos=None,
-              combine_intervals=True):
+              combine_intervals=True) -> '[ScaleNote]':
     chromatic_notes = CHROMATIC_NOTES_WITH_SHARPS if sharps else CHROMATIC_NOTES_WITH_FLATS
     chromatic_notes_len = len(chromatic_notes)
 
@@ -308,7 +356,27 @@ class Chord:
 
     def get_relative_minor(self):
         chords = get_chords(self.key, self.sharps)
-        return chords[6 - 1]
+        return chords[5]
+
+    @staticmethod
+    def get_from_notes(notes: '[Note]'):
+        notes = list(filter(lambda x: isinstance(x, Note), notes))
+        if not notes:
+            return
+
+        intervals = []
+        for i in range(len(notes) - 1):
+            intervals.append(notes[i + 1] - notes[i])
+
+        for key, value in Chord.CHORD_TYPE_TO_INTERVALS.items():
+            if value == intervals:
+                return Chord(key=notes[0], chord_type=key)
+
+    def __eq__(self, other: 'Chord'):
+        if not isinstance(other, Chord):
+            return False
+
+        return self.key == other.key and self.chord_type == other.chord_type
 
     def __str__(self):
         return f"{self.key}{self._get_symbol_from_type()}({self.notes})"
@@ -349,6 +417,18 @@ def get_chords(key=Notes.C, sharps=True):
             Chord(key=scale_notes[6].note, chord_type=ChordType.DIMINISHED)]
 
 
+def get_chords_for_scale(scale=Scales.MAJOR, key=Notes.C, sharps=True):
+    if scale == Scales.MAJOR:
+        return get_chords(key=key, sharps=True)
+
+    chords = []
+    for i in range(1, 8):
+        notes = get_notes(scale=scale, key=key, octaves=2, filter_pos=[i, i + 2, i + 4])
+        chords.append(Chord.get_from_notes(convert_scale_notes_to_notes(notes)))
+
+    return chords
+
+
 def get_harmonic_scale(key=Notes.C, sharps=True):
     scale_notes = get_notes(Scales.MAJOR, key, sharps)
     return [Chord(key=scale_notes[4].note, chord_type=ChordType.SEVENTH),
@@ -359,3 +439,21 @@ def get_harmonic_scale(key=Notes.C, sharps=True):
             Chord(key=scale_notes[5].note, chord_type=ChordType.MINOR),
             Chord(key=scale_notes[1].note, chord_type=ChordType.MINOR)]
 
+
+def arrange_harmonic_degrees_in_harmonic_scale(chords: '[Chord]'):
+    chords = list(filter(lambda x: isinstance(x, Chord), chords))
+    if len(chords) != 7:
+        raise RuntimeError("harmonic scale only support 7 degrees")
+
+    return [Chord(key=chords[4].key, chord_type=ChordType.SEVENTH),
+            chords[0],
+            chords[3],
+            chords[6],
+            Chord(key=chords[2].key, chord_type=ChordType.SEVENTH),
+            chords[5],
+            chords[1]]
+
+
+def convert_scale_notes_to_notes(scale_notes: '[ScaleNote]'):
+    scale_notes = list(filter(lambda x: isinstance(x, ScaleNote), scale_notes))
+    return list(map(lambda x: x.note, scale_notes))
